@@ -1,4 +1,4 @@
-package main
+package statsware
 
 import (
 	"fmt"
@@ -7,10 +7,6 @@ import (
 
 	statsd "gopkg.in/alexcesaro/statsd.v2"
 )
-
-type Backend interface {
-	WriteRequest(r *http.Request, httpstatus int, t time.Duration) err
-}
 
 type URItransformer func(string) string
 
@@ -31,7 +27,7 @@ func cullMemory(memory map[string]string, limit int) {
 	i := 0
 	for k, _ := range memory {
 		if i > limit {
-			badkeys = append(badkeys)
+			badkeys = append(badkeys, k)
 		}
 		i++
 	}
@@ -53,15 +49,18 @@ func Memoize(f URItransformer, limit int) URItransformer {
 	}
 }
 
+type Backend interface {
+	WriteRequest(r *http.Request, httpstatus int, t time.Duration) error
+}
+
 type StatsdBackend struct {
 	statsd.Client
-	statsd.Timing
 	TransformURI URItransformer
 }
 
-func (b *StatsdBackend) WriteRequest(r *http.Request, httpStatus int, t time.Duration) error {
+func (b StatsdBackend) WriteRequest(r *http.Request, httpStatus int, t time.Duration) error {
 	b.Client.Increment(fmt.Sprintf("http%d", httpStatus))
-	b.Timing(b.TransformURI(r.URL.RequestURI()), t)
+	b.Client.Timing(b.TransformURI(r.URL.RequestURI()), t)
 	return nil
 }
 
@@ -71,7 +70,7 @@ type responseCaptureWriter struct {
 	startTime  time.Time
 }
 
-func (rw *responseCaptureWriter) WriteHeader(code int) {
+func (rw responseCaptureWriter) WriteHeader(code int) {
 	rw.statusCode = code
 	rw.startTime = time.Now()
 	rw.ResponseWriter.WriteHeader(code)
@@ -83,7 +82,7 @@ type Middleware struct {
 }
 
 func (m *Middleware) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	rw := responseCaptureWriter{w, http.StatusOk}
+	rw := responseCaptureWriter{w, http.StatusOK, time.Now()}
 	m.Handler.ServeHTTP(rw, r)
-	m.Backend.CompleteRequest(r, rw.statusCode, time.Since(rw.startTime))
+	m.Backend.WriteRequest(r, rw.statusCode, time.Since(rw.startTime))
 }
