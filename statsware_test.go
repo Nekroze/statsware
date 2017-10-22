@@ -1,7 +1,6 @@
 package statsware
 
 import (
-	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -12,18 +11,14 @@ import (
 )
 
 type TestBackend struct {
-	Status int
-	Uri    string
-	time.Duration
+	data         map[string]interface{}
 	TransformURI URItransformer
 }
 
 func (b TestBackend) WriteRequest(r *http.Request, httpStatus int, t time.Duration) error {
-	fmt.Printf("TTT stats %#v uri %#v duration %s\n", b.Status, b.Uri, b.Duration)
-	b.Status = httpStatus
-	b.Uri = b.TransformURI(r.URL.RequestURI())
-	b.Duration = t
-	fmt.Printf("WWW stats %#v uri %#v duration %s\n", b.Status, b.Uri, b.Duration)
+	b.data["status"] = httpStatus
+	b.data["uri"] = b.TransformURI(r.URL.RequestURI())
+	b.data["time"] = t
 	return nil
 }
 
@@ -39,7 +34,7 @@ func TestMiddleware(t *testing.T) {
 	}
 	testhandler := http.HandlerFunc(testcheck)
 
-	b := TestBackend{TransformURI: testURItrasformer, Status: 1}
+	b := TestBackend{TransformURI: testURItrasformer, data: map[string]interface{}{}}
 	middleware := Middleware{Handler: testhandler, Backend: &b}
 
 	req, err := http.NewRequest("GET", "/test", nil)
@@ -48,11 +43,10 @@ func TestMiddleware(t *testing.T) {
 	}
 	rr := httptest.NewRecorder()
 
-	fmt.Printf("XXX stats %#v uri %#v duration %s\n", b.Status, b.Uri, b.Duration)
 	middleware.ServeHTTP(rr, req)
-	fmt.Printf("YYY stats %#v uri %#v duration %s\n", b.Status, b.Uri, b.Duration)
 
 	assert.Equal(t, http.StatusOK, rr.Code)
-	assert.Equal(t, rr.Code, b.Status)
-	assert.Equal(t, "/test", b.Uri)
+	assert.Equal(t, rr.Code, b.data["status"].(int))
+	assert.Equal(t, "/test", b.data["uri"].(string))
+	assert.True(t, b.data["time"].(time.Duration) > 0)
 }
