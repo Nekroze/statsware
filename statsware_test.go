@@ -1,6 +1,7 @@
 package statsware
 
 import (
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -18,10 +19,11 @@ type TestBackend struct {
 }
 
 func (b TestBackend) WriteRequest(r *http.Request, httpStatus int, t time.Duration) error {
+	fmt.Printf("TTT stats %#v uri %#v duration %s\n", b.Status, b.Uri, b.Duration)
 	b.Status = httpStatus
 	b.Uri = b.TransformURI(r.URL.RequestURI())
-	b.Uri = b.TransformURI(r.RequestURI)
 	b.Duration = t
+	fmt.Printf("WWW stats %#v uri %#v duration %s\n", b.Status, b.Uri, b.Duration)
 	return nil
 }
 
@@ -37,8 +39,8 @@ func TestMiddleware(t *testing.T) {
 	}
 	testhandler := http.HandlerFunc(testcheck)
 
-	backend := TestBackend{TransformURI: testURItrasformer}
-	middleware := Middleware{testhandler, backend}
+	b := TestBackend{TransformURI: testURItrasformer, Status: 1}
+	middleware := Middleware{Handler: testhandler, Backend: &b}
 
 	req, err := http.NewRequest("GET", "/test", nil)
 	if err != nil {
@@ -46,9 +48,11 @@ func TestMiddleware(t *testing.T) {
 	}
 	rr := httptest.NewRecorder()
 
+	fmt.Printf("XXX stats %#v uri %#v duration %s\n", b.Status, b.Uri, b.Duration)
 	middleware.ServeHTTP(rr, req)
+	fmt.Printf("YYY stats %#v uri %#v duration %s\n", b.Status, b.Uri, b.Duration)
 
 	assert.Equal(t, http.StatusOK, rr.Code)
-	assert.Equal(t, rr.Code, backend.Status)
-	assert.Equal(t, "/test", backend.Uri)
+	assert.Equal(t, rr.Code, b.Status)
+	assert.Equal(t, "/test", b.Uri)
 }

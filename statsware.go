@@ -58,7 +58,7 @@ type StatsdBackend struct {
 	TransformURI URItransformer
 }
 
-func (b StatsdBackend) WriteRequest(r *http.Request, httpStatus int, t time.Duration) error {
+func (b *StatsdBackend) WriteRequest(r *http.Request, httpStatus int, t time.Duration) error {
 	b.Client.Increment(fmt.Sprintf("http%d", httpStatus))
 	b.Client.Timing(b.TransformURI(r.URL.RequestURI()), t)
 	return nil
@@ -66,12 +66,12 @@ func (b StatsdBackend) WriteRequest(r *http.Request, httpStatus int, t time.Dura
 
 type responseCaptureWriter struct {
 	http.ResponseWriter
-	statusCode int
-	startTime  time.Time
+	code      int
+	startTime time.Time
 }
 
 func (rw responseCaptureWriter) WriteHeader(code int) {
-	rw.statusCode = code
+	rw.code = code
 	rw.startTime = time.Now()
 	rw.ResponseWriter.WriteHeader(code)
 }
@@ -84,5 +84,5 @@ type Middleware struct {
 func (m *Middleware) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	rw := responseCaptureWriter{w, http.StatusOK, time.Now()}
 	m.Handler.ServeHTTP(rw, r)
-	m.Backend.WriteRequest(r, rw.statusCode, time.Since(rw.startTime))
+	m.Backend.WriteRequest(r, rw.code, time.Since(rw.startTime))
 }
