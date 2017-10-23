@@ -1,7 +1,6 @@
 package statsware
 
 import (
-	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -18,12 +17,10 @@ type TestBackend struct {
 	TransformURI URItransformer
 }
 
-func (b TestBackend) WriteRequest(r *http.Request, httpStatus int, t time.Duration) error {
-	fmt.Printf("TTT stats %#v uri %#v duration %s\n", b.Status, b.Uri, b.Duration)
+func (b *TestBackend) WriteRequest(r *http.Request, httpStatus int, t time.Duration) error {
 	b.Status = httpStatus
 	b.Uri = b.TransformURI(r.URL.RequestURI())
 	b.Duration = t
-	fmt.Printf("WWW stats %#v uri %#v duration %s\n", b.Status, b.Uri, b.Duration)
 	return nil
 }
 
@@ -48,9 +45,7 @@ func TestMiddleware(t *testing.T) {
 	}
 	rr := httptest.NewRecorder()
 
-	fmt.Printf("XXX stats %#v uri %#v duration %s\n", b.Status, b.Uri, b.Duration)
 	middleware.ServeHTTP(rr, req)
-	fmt.Printf("YYY stats %#v uri %#v duration %s\n", b.Status, b.Uri, b.Duration)
 
 	assert.Equal(t, http.StatusOK, rr.Code)
 	assert.Equal(t, rr.Code, b.Status)
